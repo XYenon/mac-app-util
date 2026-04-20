@@ -14,9 +14,7 @@
 
 {
   inputs = {
-    # This has SBCL 2.4.10 and docktuil 3.1.3 which are known to work
-    nixpkgs.url = "github:NixOS/nixpkgs/af51545ec9a44eadf3fe3547610a5cdd882bc34e";
-    cl-nix-lite.url = "github:hraban/cl-nix-lite";
+    nixpkgs.url = "github:NixOS/nixpkgs/nixpkgs-unstable";
     flake-compat = {
       # Use my own fixed-output-derivation branch because I don’t want users to
       # need to eval-time download dependencies.
@@ -28,7 +26,10 @@
       url = "flake-utils";
       inputs.systems.follows = "systems";
     };
-    treefmt-nix.url = "github:numtide/treefmt-nix";
+    treefmt-nix = {
+      url = "github:numtide/treefmt-nix";
+      inputs.nixpkgs.follows = "nixpkgs";
+    };
   };
 
   outputs =
@@ -36,7 +37,6 @@
       self,
       nixpkgs,
       flake-utils,
-      cl-nix-lite,
       treefmt-nix,
       ...
     }:
@@ -104,15 +104,23 @@
       eachDefaultSystem (
         system:
         let
-          pkgs = nixpkgs.legacyPackages.${system}.extend cl-nix-lite.overlays.default;
+          pkgs = nixpkgs.legacyPackages.${system};
           treefmt =
             { ... }:
             {
               projectRootFile = "flake.nix";
-              programs.nixfmt = {
-                enable = true;
-                strict = true;
+              programs = {
+                nixfmt = {
+                  enable = true;
+                  strict = true;
+                };
+                shellcheck.enable = true;
+                shfmt = {
+                  enable = true;
+                  indent_size = 0;
+                };
               };
+              settings.formatter.shellcheck.excludes = [ ".envrc" ];
             };
           treefmtPkg = treefmt-nix.lib.evalModule pkgs treefmt;
         in
@@ -124,30 +132,22 @@
           packages = {
             default = pkgs.callPackage (
               {
-                lispPackagesLite,
                 dockutil,
                 findutils,
                 jq,
                 rsync,
               }:
-              with lispPackagesLite;
-              lispScript rec {
-                name = "mac-app-util";
-                src = ./main.lisp;
-                dependencies = [
-                  alexandria
-                  inferior-shell
-                  cl-interpol
-                  cl-json
-                  str
-                  trivia
-                ];
+              pkgs.stdenvNoCC.mkDerivation {
+                pname = "mac-app-util";
+                version = "0.0.0";
+                src = ./main.sh;
+                dontUnpack = true;
                 nativeBuildInputs = [ pkgs.makeBinaryWrapper ];
-                postInstall = ''
-                  wrapProgramBinary "$out/bin/${name}" \
+                installPhase = ''
+                  install -Dm755 "$src" "$out/bin/mac-app-util"
+                  wrapProgramBinary "$out/bin/mac-app-util" \
                     --suffix PATH : "${
-                      with pkgs;
-                      lib.makeBinPath [
+                      pkgs.lib.makeBinPath [
                         dockutil
                         rsync
                         findutils
@@ -156,7 +156,7 @@
                     }"
                 '';
                 installCheckPhase = ''
-                  $out/bin/${name} --help
+                  $out/bin/mac-app-util --help
                 '';
                 doInstallCheck = true;
                 meta.license = pkgs.lib.licenses.agpl3Only;
