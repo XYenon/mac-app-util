@@ -136,6 +136,7 @@
                 findutils,
                 jq,
                 rsync,
+                gawk,
               }:
               pkgs.stdenvNoCC.mkDerivation {
                 pname = "mac-app-util";
@@ -152,6 +153,7 @@
                         rsync
                         findutils
                         jq
+                        gawk
                       ]
                     }"
                 '';
