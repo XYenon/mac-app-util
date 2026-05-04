@@ -152,6 +152,7 @@
                         rsync
                         findutils
                         jq
+                        gawk
                       ]
                     }"
                 '';
