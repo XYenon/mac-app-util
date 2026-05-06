@@ -25,6 +25,7 @@ COPYABLE_APP_PROPS=(
 	"CFBundleDocumentTypes"
 	"CFBundleGetInfoString"
 	"CFBundleIconFile"
+	"CFBundleIconName"
 	"CFBundleIdentifier"
 	"CFBundleInfoDictionaryVersion"
 	"CFBundleName"
@@ -45,10 +46,15 @@ non_empty_env() {
 	[[ -n ${!1-} ]]
 }
 
-DRY_RUN=0
-if non_empty_env "DRY_RUN"; then
+DRY_RUN="${DRY_RUN-}"
+case "$DRY_RUN" in
+"" | 0 | false | FALSE | no | NO | off | OFF)
+	DRY_RUN=0
+	;;
+*)
 	DRY_RUN=1
-fi
+	;;
+esac
 
 if non_empty_env "DEBUGSH"; then
 	set -x
@@ -100,6 +106,14 @@ copy_file() {
 		return 0
 	fi
 	cp -- "$1" "$2"
+}
+
+make_writable() {
+	if [[ $DRY_RUN -eq 1 ]]; then
+		printf 'chmod u+w %q\n' "$1"
+		return 0
+	fi
+	chmod u+w -- "$1"
 }
 
 with_temp_dir() {
@@ -185,6 +199,8 @@ _copy_paths_impl() {
 
 	copy_file "$from" "orig"
 	copy_file "$to" "bare-wrapper"
+	make_writable orig
+	make_writable bare-wrapper
 
 	run "$PLUTIL" -convert json -- orig
 	run "$PLUTIL" -convert json -- bare-wrapper
@@ -196,6 +212,7 @@ _copy_paths_impl() {
 		jq --argjson keys "$keys_json" "$jqfilter" <orig >filtered
 		jq -s add bare-wrapper filtered >final
 	fi
+	make_writable final
 	run "$PLUTIL" -convert xml1 -- final
 
 	copy_file final "$to"
