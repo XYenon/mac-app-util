@@ -193,6 +193,8 @@ _copy_paths_impl() {
 	local from="$1"
 	local to="$2"
 	local jqfilter="$3"
+	# shellcheck disable=SC2016
+	local mergefilter='.[0] as $wrapper | .[1] as $source | ($wrapper | del(.CFBundleIconFile, .CFBundleIconName)) + $source'
 
 	local keys_json
 	keys_json="$(printf '%s\n' "${COPYABLE_APP_PROPS[@]}" | jq -R . | jq -s .)"
@@ -207,10 +209,10 @@ _copy_paths_impl() {
 
 	if [[ $DRY_RUN -eq 1 ]]; then
 		printf 'exec: %s <orig >filtered\n' "$(print_cmd jq --argjson keys "$keys_json" "$jqfilter")"
-		printf 'exec: %s >final\n' "$(print_cmd jq -s add bare-wrapper filtered)"
+		printf 'exec: %s >final\n' "$(print_cmd jq -s "$mergefilter" bare-wrapper filtered)"
 	else
 		jq --argjson keys "$keys_json" "$jqfilter" <orig >filtered
-		jq -s add bare-wrapper filtered >final
+		jq -s "$mergefilter" bare-wrapper filtered >final
 	fi
 	make_writable final
 	run "$PLUTIL" -convert xml1 -- final
